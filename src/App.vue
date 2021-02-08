@@ -2,7 +2,7 @@
   <div id="app">
     <!-- <img src="local-resource://C:/Users/xdu/Workspace/hexo/source/images/2020/12/06/59822a38-a487-4b2d-a5c4-ab12b7f60641.png"/> -->
     <div id="left">
-      <Calendar v-bind:datesWithNote="currentMonth" v-on:dayclick="loadNote" />
+      <Calendar v-bind:datesWithNote="datesWithNote" v-on:dayclick="loadNote" />
     </div>
     <div id="right">
       <Editor v-model="note" />
@@ -15,6 +15,7 @@ import fs from 'fs'
 import path from 'path'
 import moment from 'moment'
 import 'core-js'
+import chokidar from 'chokidar'
 
 import Editor from "./components/Editor"
 import Calendar from "./components/Calendar"
@@ -33,17 +34,35 @@ export default {
   },
 
   created() {
-    console.log("Parent created: " + this.currentMonth.length)
-    this.getNoteDates()
+    console.log("Parent created: " + this.datesWithNote.length)
+
+    this.watcher = chokidar.watch(postPath, {
+      persistent: true,
+      ignoreInitial: true,
+      depth: 0,
+      awaitWriteFinish: true
+    })
+    this.watcher.on('change', path => { console.log("file change " + path) })
+    this.watcher.on('add', path => { console.log("file add " + path)})
+    this.watcher.on('unlink', path => { console.log("file delete " + path)})
+    
+    this.getDatesWithNote()
   },
 
   updated() {
-    console.log("Parent data changed : " + this.currentMonth.length)
+    console.log("Parent data changed : " + this.datesWithNote.length)
+  },
+
+  async destroyed() {
+    if (this.watcher) {
+      await this.watcher.close()
+    }
   },
 
   data: () => {
     return {
-      currentMonth: [],
+      datesWithNote: [],
+      watcher: null,
       note: ""
     }
   },
@@ -74,32 +93,31 @@ export default {
       })
     },
 
-    getNoteDates() {
+    /**
+     * Load the posts and return a list of dates.
+     */
+    getDatesWithNote() {
 
-      /*
-      let month2 = new String(month)
-      if (month2.length == 1)
-        month2 = "0" + month2
-
-      let pattern = year + month2
-    */
-      let dates = new Array()
+      let arry = new Array()
 
       fs.readdir(postPath, (err, files) => {
+        // Folder reading error
         if (err) throw err
+
         for (let i = 0; i < files.length; i ++) {
 
-          if (files[i].match(/^[0-9]{6}/gi)) {
+          // Take only the filename staring with 8 numbers, such as 20201020
+          if (files[i].match(/^[0-9]{8}/gi)) {
+
+            // Convert the file prefix to a date
             let strDate = files[i].substring(0, 8)
             let dt = moment(strDate, 'YYYYMMDD').toDate()
 
-            dates.push(dt)
-            console.log(dt.toString())
+            arry.push(dt)
           }
         }
 
-        this.currentMonth = dates
-
+        this.datesWithNote = arry
       })
     }
   }
